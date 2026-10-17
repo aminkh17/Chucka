@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  launchd agent example — runs the briefing daily at 07:00.
+
+  Install (from the repo root):
+    sed "s|/PATH/TO/Chucka|$PWD|g; s|com.morningdashboard|com.$(whoami).morningdashboard|g" \
+      com.morningdashboard.plist.example > ~/Library/LaunchAgents/com.$(whoami).morningdashboard.plist
+    launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.$(whoami).morningdashboard.plist
+
+  Run it now without waiting for 07:00:
+    launchctl kickstart gui/$(id -u)/com.$(whoami).morningdashboard
+
+  Uninstall:
+    launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.$(whoami).morningdashboard.plist
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.morningdashboard</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/zsh</string>
+    <string>/PATH/TO/Chucka/run-morning.sh</string>
+  </array>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>7</integer>
+    <key>Minute</key>
+    <integer>0</integer>
+  </dict>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
+  <key>StandardOutPath</key>
+  <string>/PATH/TO/Chucka/logs/morning.log</string>
+  <key>StandardErrorPath</key>
+  <string>/PATH/TO/Chucka/logs/morning.log</string>
+</dict>
+</plist>

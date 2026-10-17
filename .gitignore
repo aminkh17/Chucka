@@ -1,0 +1,21 @@
+# Personal data & runtime artifacts — never commit these
+.env
+
+# WhatsApp gateway (its own project, cloned next to the sources)
+OpenWA/
+
+# Generated output
+out/
+podcast/
+logs/
+morning-dashboard-*.png
+
+# launchd agent (contains absolute paths)
+com.amin.morningdashboard.plist
+
+# Python
+__pycache__/
+*.pyc
+
+# macOS
+.DS_Store

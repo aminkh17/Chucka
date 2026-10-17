@@ -8,7 +8,9 @@ LOG_DIR="$ROOT/logs"
 mkdir -p "$LOG_DIR"
 
 # Personal configuration lives in .env (never committed); see .env.example.
-[[ -f "$ROOT/.env" ]] && { set -a; source "$ROOT/.env"; set +a; }
+if [[ -f "$ROOT/.env" ]]; then
+  set -a; source "$ROOT/.env"; set +a
+fi
 
 NODE="${OPENWA_NODE:-node}"
 PY="${PYTHON_BIN:-python3}"

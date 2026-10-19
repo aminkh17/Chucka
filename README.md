@@ -34,6 +34,23 @@ run-morning.sh  ─────────────────────�
 - **Delivery** — [OpenWA](https://open-wa.org) (unofficial WhatsApp Web gateway) sends the image, then the voice note as a real PTT bubble. Both wait for a `delivered`/`read` confirmation before the job finishes. The runner starts the gateway only when needed and stops what it started.
 - **Schedule** — a launchd agent runs `run-morning.sh` daily at 07:00. A single day's failure (Mac asleep, vault unreadable, script generation down) degrades gracefully: the image still goes out even if the voice can't be made.
 
+## Priority model
+
+Every job, project and task is scored from signals already in your vault — job stage and
+temperature, follow-up staleness, project next-actions and open tasks, task type and urgency
+words, plus priority inheritance from the task's project — then banded within its lane:
+
+- **P1** — do first (one per lane)
+- **P2** — next up
+- **P3** — later
+
+The three P1s — best job, best project, best task — are the day's **Top 3**, matching the
+morning rule (1 submit • 1 code • 1 study). The PNG writes `out/priorities-<date>.json` and
+the podcast generator reads it, so the image and the voice note always agree.
+
+Override with `#p1` / `#p2` / `#p3` on any task line, or `priority:: 1|2|3` anywhere in a
+project note. Explicit tags beat the computed score, in ordering and in banding.
+
 ## Requirements
 
 | Thing | Why | Notes |
@@ -110,8 +127,9 @@ Everything lives in `.env` (see `.env.example` for the full list with comments):
 ## Repo layout
 
 ```
-generate_dashboard.py       vault → PNG
-generate_podcast_script.py  vault + weather → script via opencode CLI
+priority.py                 scoring + Top 3, shared by the PNG and the voice
+generate_dashboard.py       vault → PNG (+ out/priorities-<date>.json)
+generate_podcast_script.py  vault + weather → script via opencode CLI (same ranking)
 tts_voicestudio.py          script → voice (VoiceStudio)
 tts_gemini.py               script → voice (Gemini)
 text_to_voice.py            script → voice (macOS say)

@@ -12,6 +12,7 @@ import urllib.request
 ROOT = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, ROOT)
 from generate_dashboard import load_jobs, load_projects, load_tasks, clean  # noqa: E402
+from priority import build_payload  # noqa: E402
 
 import envload; envload.load_env()  # noqa: E402
 
@@ -65,24 +66,42 @@ def dashboard_summary():
     jobs, closed, updated = load_jobs()
     projects = load_projects()
     tasks, total = load_tasks()
+
+    # Prefer the ranking the PNG just rendered, so both always agree.
+    prio_path = os.path.join(ROOT, "out", f"priorities-{TODAY:%Y-%m-%d}.json")
+    try:
+        with open(prio_path, encoding="utf-8") as f:
+            ranked = json.load(f)
+    except OSError:
+        ranked = build_payload(jobs, projects, tasks, TODAY)
+
+    def iso(value):
+        return value if isinstance(value, str) or value is None else value.isoformat()
+
+    def task_rows(items, limit=6):
+        return [{"task": t["text"], "priority": t["priority"]} for t in items[:limit]]
+
     return {
         "jobs_updated": updated.isoformat() if updated else None,
+        "top3": ranked["top3"],
         "active_roles": [
             {"company": j["company"], "role": j["role"], "stage": j["stage"],
-             "last_activity": j["last"].isoformat() if j["last"] else None,
-             "temperature": j["temp"], "next_move": j["next"]}
-            for j in jobs
+             "last_activity": iso(j["last"]),
+             "temperature": j["temp"], "next_move": j["next"],
+             "priority": j["priority"], "priority_score": j["score"]}
+            for j in ranked["jobs"]
         ],
         "closed": closed,
         "projects": [
             {"name": p["name"], "status": p["status"], "open_tasks": p["open"],
-             "done_tasks": p["done"], "last_edited": p["updated"].isoformat()}
-            for p in projects[:8]
+             "done_tasks": p["done"], "last_edited": iso(p["updated"]),
+             "priority": p["priority"], "priority_score": p["score"]}
+            for p in ranked["projects"][:8]
         ],
         "open_tasks_total": total,
-        "study": tasks["learn"][:6],
-        "writing": tasks["write"][:6],
-        "reviews": tasks["review"][:6],
+        "study": task_rows(ranked["tasks"]["learn"]),
+        "writing": task_rows(ranked["tasks"]["write"]),
+        "reviews": task_rows(ranked["tasks"]["review"]),
     }
 
 
@@ -106,8 +125,9 @@ Write the script so it is spoken out loud, not read:
    temperature and describe the day briefly, mention if rain is likely). If the weather data
    contains an "error", skip the weather.
 3. Explain the morning dashboard clearly, in this order:
+   - "top3": the three must-dos for today — one job, one project, one task. They are
+     already ranked: follow their exact order and explain why each one matters
    - how many active job roles there are and the single most important next action
-   - the top must-do items for today, explaining why they matter
    - the state of the projects, naming only the two or three that need attention
    - what is in the study queue and what writing is waiting
 4. Close with one motivating sentence. This closing line is required, always include it.
@@ -125,6 +145,8 @@ Rules:
   odd exclamation where it fits. Never flat or sleepy.
 - Never read non-English names of companies letter by letter; say them naturally.
 - Do not invent facts that are not in the data. If something is unknown, leave it out.
+- Priority: every item in the DATA carries a "priority" — P1 (do first), P2 (next), P3
+  (later). The "top3" list is authoritative: never reorder it or promote something else.
 - Address Amin directly as "you".
 - Output only the script text.
 

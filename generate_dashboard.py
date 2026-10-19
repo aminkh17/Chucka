@@ -4,7 +4,7 @@ import json, os, re, sys, glob, datetime as dt
 from PIL import Image, ImageDraw, ImageFont
 
 import envload; envload.load_env()  # noqa: E402
-from priority import build_payload, parse_due, priority_field  # noqa: E402
+from priority import build_payload, parse_due, parse_task_due, priority_field  # noqa: E402
 
 VAULT = os.environ.get("VAULT", "")
 OUT_DIR = os.environ.get("OUT_DIR", os.path.join(os.path.dirname(os.path.abspath(__file__)), "out"))
@@ -27,6 +27,17 @@ def clean(s):
     s = re.sub(r"https?://\S+", "", s)
     s = re.sub(r"[^\u0000-\u024F\u2010-\u2027\u2190-\u21FF]", "", s)
     return re.sub(r"\s+", " ", s).strip()
+
+# Obsidian Tasks metadata: due dates, priority flags, and other emoji fields
+TASK_META = re.compile(
+    r"(?:📅|🛫|⏳|✅|➕|🔁|❌|🆔|⛔)\s*\d{4}-\d{2}-\d{2}"
+    r"|(?:due|deadline)\s*::?\s*\d{4}-\d{2}-\d{2}"
+    r"|[🔺⏫🔼🔽⏬]",
+    re.IGNORECASE,
+)
+
+def clean_task(s):
+    return clean(TASK_META.sub("", re.sub(r"#\w+", "", s))).strip(" -,")
 
 def parse_date(s):
     m = re.search(r"(\d{4})-(\d{2})-(\d{2})", s)
@@ -90,7 +101,11 @@ def load_projects():
         if sm:
             status = clean(sm.group(2))
         elif open_t:
-            status = "Next: " + clean(open_t[0])
+            first = open_t[0]
+            status = "Next: " + (clean_task(first) or clean(first))
+            first_due = parse_task_due(first)
+            if first_due:
+                status += f" • due {first_due:%d %b}"
         else:
             status = "Idea / notes"
         project_meta = "\n".join(l for l in body.splitlines()
@@ -114,15 +129,21 @@ def load_tasks():
             total += 1
             raw = m.group(1)
             tags = {t.lower() for t in re.findall(r"#(\w+)", raw)}
-            text = clean(re.sub(r"#\w+", "", raw)).strip(" -,") or clean(raw)
-            item = {"text": text, "raw": raw,
-                    "source": os.path.relpath(f, VAULT), "mtime": mdate(f)}
+            due = parse_task_due(raw)
+            text = clean_task(raw) or clean(raw)
+            source = os.path.relpath(f, VAULT)
+            project = clean(source.split("/")[1]) if source.startswith("Projects/") else ""
+            item = {"text": text, "raw": raw, "due": due, "project": project,
+                    "source": source, "mtime": mdate(f)}
             if tags & {"study", "learn", "watch", "reading", "lookup", "localllm"}:
                 tagged["learn"].append(item)
             elif "write" in tags:
                 tagged["write"].append(item)
             elif "review" in tags:
                 tagged["review"].append(item)
+            else:
+                # untagged tasks still rank (a due date or priority flag can put one on the top 3)
+                tagged["other"].append(item)
     return tagged, total
 
 # ---------- drawing ----------
@@ -151,6 +172,18 @@ def fit(text, font, maxw):
     while text and d.textlength(text + "…", font=font) > maxw:
         text = text[:-1]
     return text.rstrip() + "…"
+
+def due_tag(item):
+    """Compact deadline for a task row: due today, overdue, or the date."""
+    due = item.get("due")
+    if not due:
+        return ""
+    left = (due - TODAY).days
+    if left < 0:
+        return "  •  OVERDUE"
+    if left == 0:
+        return "  •  due today"
+    return f"  •  due {due:%d %b}"
 
 def label(x, y, text, color):
     f = F(20, True)
@@ -312,11 +345,11 @@ def main():
         if i < len(tasks["learn"]):
             t = tasks["learn"][i]
             d.text((L + 38, cy + i * 26), t["priority"], font=F(14, True), fill=PRIO_COLORS[t["priority"]])
-            d.text((L + 64, cy + i * 26), fit("• " + t["text"], F(19), CW // 2 - 76), font=F(19), fill=(40, 55, 75))
+            d.text((L + 64, cy + i * 26), fit("• " + t["text"] + due_tag(t), F(19), CW // 2 - 76), font=F(19), fill=(40, 55, 75))
         if i < len(right):
             t = right[i]
             d.text((rx, cy + i * 26), t["priority"], font=F(14, True), fill=PRIO_COLORS[t["priority"]])
-            d.text((rx + 26, cy + i * 26), fit("• " + t["text"], F(19), CW // 2 - 76), font=F(19), fill=(40, 55, 75))
+            d.text((rx + 26, cy + i * 26), fit("• " + t["text"] + due_tag(t), F(19), CW // 2 - 76), font=F(19), fill=(40, 55, 75))
     by = y + h - 62
     d.rounded_rectangle([L + 20, by, R - 20, by + 46], radius=13, fill=NAVY)
     d.text((L + 38, by + 11), "Morning rule: 1 submit  •  1 code  •  1 study  •  pick 3 Must-Do", font=F(20, True), fill=(255, 255, 255))

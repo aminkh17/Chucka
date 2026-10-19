@@ -11,13 +11,18 @@ vault, then a band within its lane:
 The three P1s — best job, best project, best task — are the day's Top 3, so the
 dashboard image and the voice note share one ranking.
 
-Manual override: put #p1 / #p2 / #p3 (or `priority:: 1|2|3`) on a task line or
-in a project note. Explicit beats computed, in ordering and in banding.
+Manual override: put #p1 / #p2 / #p3 on a task line, use Obsidian Tasks flags
+(🔺/⏫ = P1, 🔼 = P2, 🔽/⏬ = P3), or `priority:: 1|2|3` on its own line in a
+project note. Tasks can also carry a due date (📅 2026-11-10). Explicit beats
+computed, in ordering and in banding.
 """
 import re
 import datetime as dt
 
 PRIORITY_TAG = re.compile(r"#p([123])\b", re.IGNORECASE)
+# Obsidian Tasks flags: highest/high -> P1, medium -> P2, low/lowest -> P3
+PRIORITY_EMOJI = re.compile(r"🔺|⏫|🔼|🔽|⏬")
+_EMOJI_MAP = {"🔺": "P1", "⏫": "P1", "🔼": "P2", "🔽": "P3", "⏬": "P3"}
 # standalone line only — inline examples in notes must not become overrides
 PRIORITY_FIELD = re.compile(r"(?im)^\s*(?:[-*]\s+)?priority\s*::\s*(high|medium|low|[123])\s*$")
 _FIELD_MAP = {"high": "P1", "medium": "P2", "low": "P3",
@@ -46,17 +51,38 @@ def parse_due(text):
     return None
 
 
+_TASK_DUE_PATTERNS = (
+    re.compile(r"📅\s*(\d{4}-\d{2}-\d{2})"),
+    re.compile(r"(?:due|deadline)\s*::?\s*(\d{4}-\d{2}-\d{2})", re.IGNORECASE),
+)
+
+
+def parse_task_due(text):
+    """Due date from an Obsidian Tasks line: `📅 2026-11-10` or `due:: 2026-11-10`."""
+    for pattern in _TASK_DUE_PATTERNS:
+        m = pattern.search(text or "")
+        if m:
+            try:
+                return dt.date(*map(int, m.group(1).split("-")))
+            except ValueError:
+                return None
+    return None
+
+
 def explicit_priority(*parts):
     blob = " ".join(p for p in parts if p)
     m = PRIORITY_TAG.search(blob)
     if m:
         return f"P{m.group(1)}"
+    m = PRIORITY_EMOJI.search(blob)
+    if m:
+        return _EMOJI_MAP[m.group(0)]
     m = PRIORITY_FIELD.search(blob)
     return _FIELD_MAP.get(m.group(1).lower()) if m else None
 
 
 def priority_field(text):
-    """Project-level override: `priority:: 1|2|3|high|medium|low` anywhere in the note."""
+    """Project override: `priority:: 1|2|3|high|medium|low` on its own line in the note."""
     m = PRIORITY_FIELD.search(text or "")
     return _FIELD_MAP.get(m.group(1).lower()) if m else None
 
@@ -125,6 +151,12 @@ def task_score(task, today, project_priorities):
     if mtime:
         days = (today - mtime).days
         score += 8 if days <= 2 else 4 if days <= 7 else 0
+    due = task.get("due")
+    if due:
+        # same urgency curve as projects
+        left = (due - today).days
+        score += (60 if left < 0 else 55 if left == 0 else 45 if left <= 2
+                  else 32 if left <= 7 else 20 if left <= 14 else 10 if left <= 30 else 0)
     return _score(score)
 
 
@@ -181,6 +213,12 @@ def rank_tasks(tasks, today, project_priorities):
     return ranked, flat
 
 
+def _task_context(task):
+    """Queue and project for the voice/PNG, e.g. 'Writing • Chucka' or just 'Magic'."""
+    parts = [LANE_LABEL.get(task.get("queue"), ""), task.get("project")]
+    return " • ".join(p for p in parts if p) or "Inbox"
+
+
 def build_top3(jobs, projects, tasks, today):
     """One P1 per lane — the morning rule: 1 submit • 1 code • 1 study."""
     top = []
@@ -202,9 +240,12 @@ def build_top3(jobs, projects, tasks, today):
                     "due_days": (due - today).days if due else None})
     if tasks:
         t = tasks[0]
+        due = t.get("due")
         top.append({"lane": "TASK", "title": t["text"],
-                    "action": LANE_LABEL.get(t.get("queue"), ""),
-                    "priority": t["priority"], "score": t["score"], "age": None})
+                    "action": _task_context(t),
+                    "priority": t["priority"], "score": t["score"], "age": None,
+                    "due": f"{due:%d %b}" if due else None,
+                    "due_days": (due - today).days if due else None})
     if len(top) < 3:
         used = {t["title"] for t in top}
         rest = []
@@ -215,9 +256,10 @@ def build_top3(jobs, projects, tasks, today):
                 if title in used:
                     continue
                 due = it.get("due")
+                action = (_task_context(it) if lane == "TASK"
+                          else it.get("next") or it.get("status") or "")
                 rest.append({"lane": lane, "title": title,
-                             "action": (it.get("next") or it.get("status")
-                                        or LANE_LABEL.get(it.get("queue"), "")),
+                             "action": action,
                              "priority": it["priority"], "score": it["score"], "age": None,
                              "due": f"{due:%d %b}" if due else None,
                              "due_days": (due - today).days if due else None})

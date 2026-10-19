@@ -37,8 +37,9 @@ run-morning.sh  ─────────────────────�
 ## Priority model
 
 Every job, project and task is scored from signals already in your vault — job stage and
-temperature, follow-up staleness, project next-actions and open tasks, task type and urgency
-words, plus priority inheritance from the task's project — then banded within its lane:
+temperature, follow-up staleness, project next-actions and open tasks, task type, urgency
+words, due dates and priority flags, plus priority inheritance from the task's project — then
+banded within its lane:
 
 - **P1** — do first (one per lane)
 - **P2** — next up
@@ -59,6 +60,20 @@ due:: 2026-10-25          # also: deadline:: 2026-10-25  or  📅 2026-10-25
 The score jumps by urgency: overdue **+60**, due today **+55**, ≤2 days **+45**, ≤7 days
 **+32**, ≤14 days **+20**, ≤30 days **+10**. The date is printed on the project card
 (`due 21 Oct (1d)`, `OVERDUE 2d`) and passed to the voice script.
+
+### Task dates and flags
+
+Task lines understand [Obsidian Tasks](https://obsidian-tasks-group.github.io/obsidian-tasks/)
+emoji metadata:
+
+```markdown
+- [ ] finish an mvp 📅 2026-11-10 ⏫
+```
+
+`📅` (or `due::`) is the end date; `🔺` highest and `⏫` high map to **P1**, `🔼` medium to
+**P2**, `🔽` low and `⏬` lowest to **P3**. A flag beats the computed score, and a due date adds
+the same urgency points as a project deadline (`due 10 Nov`, `OVERDUE 2d`). Tasks without a
+`#study` / `#write` / `#review` tag still rank — a due date or flag can put one in the Top 3.
 
 ### Manual override
 

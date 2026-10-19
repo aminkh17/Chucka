@@ -18,7 +18,8 @@ import re
 import datetime as dt
 
 PRIORITY_TAG = re.compile(r"#p([123])\b", re.IGNORECASE)
-PRIORITY_FIELD = re.compile(r"priority\s*::\s*(high|medium|low|[123])\b", re.IGNORECASE)
+# standalone line only — inline examples in notes must not become overrides
+PRIORITY_FIELD = re.compile(r"(?im)^\s*(?:[-*]\s+)?priority\s*::\s*(high|medium|low|[123])\s*$")
 _FIELD_MAP = {"high": "P1", "medium": "P2", "low": "P3",
               "1": "P1", "2": "P2", "3": "P3"}
 
@@ -26,6 +27,23 @@ _FIELD_MAP = {"high": "P1", "medium": "P2", "low": "P3",
 _ORDER_BONUS = {"P1": 1000, "P2": 0, "P3": -1000}
 
 LANE_LABEL = {"learn": "Study queue", "write": "Writing", "review": "Review"}
+
+_DUE_PATTERNS = (
+    re.compile(r"(?im)^\s*(?:[-*]\s+)?(?:due|deadline)\s*::?\s*(\d{4}-\d{2}-\d{2})\s*$"),
+    re.compile(r"(?im)^\s*(?:[-*]\s+)?📅\s*(\d{4}-\d{2}-\d{2})\s*$"),
+)
+
+
+def parse_due(text):
+    """Deadline from a note: `due:: 2026-10-25`, `deadline:: ...` or `📅 2026-10-25`."""
+    for pattern in _DUE_PATTERNS:
+        m = pattern.search(text or "")
+        if m:
+            try:
+                return dt.date(*map(int, m.group(1).split("-")))
+            except ValueError:
+                return None
+    return None
 
 
 def explicit_priority(*parts):
@@ -43,8 +61,9 @@ def priority_field(text):
     return _FIELD_MAP.get(m.group(1).lower()) if m else None
 
 
-def _clamp(n):
-    return max(0, min(100, round(n)))
+def _score(n):
+    # no upper cap: a deadline can (and should) outrank everything else
+    return max(0, round(n))
 
 
 def job_score(job, today):
@@ -63,7 +82,7 @@ def job_score(job, today):
         score += 0 if days <= 2 else 6 if days <= 6 else 12 if days <= 13 else 20
     if job.get("next"):
         score += 4
-    return _clamp(score)
+    return _score(score)
 
 
 def project_score(project, today):
@@ -73,7 +92,13 @@ def project_score(project, today):
     score += min(project.get("open", 0), 6) * 4
     days = (today - project["updated"]).days
     score += 20 if days <= 2 else 14 if days <= 7 else 8 if days <= 14 else 3 if days <= 30 else 0
-    return _clamp(score)
+    due = project.get("due")
+    if due:
+        # a deadline is the strongest signal a project can carry
+        left = (due - today).days
+        score += (60 if left < 0 else 55 if left == 0 else 45 if left <= 2
+                  else 32 if left <= 7 else 20 if left <= 14 else 10 if left <= 30 else 0)
+    return _score(score)
 
 
 _TASK_TAGS = {"interview": 30, "job": 30, "apply": 25, "write": 18, "review": 14,
@@ -100,7 +125,7 @@ def task_score(task, today, project_priorities):
     if mtime:
         days = (today - mtime).days
         score += 8 if days <= 2 else 4 if days <= 7 else 0
-    return _clamp(score)
+    return _score(score)
 
 
 def _order(item):
@@ -168,10 +193,13 @@ def build_top3(jobs, projects, tasks, today):
     if projects:
         p = projects[0]
         status = p.get("status", "")
+        due = p.get("due")
         top.append({"lane": "PROJECT", "title": p["name"],
                     "action": status[6:] if status.startswith("Next:") else status,
                     "priority": p["priority"], "score": p["score"],
-                    "age": (today - p["updated"]).days})
+                    "age": (today - p["updated"]).days,
+                    "due": f"{due:%d %b}" if due else None,
+                    "due_days": (due - today).days if due else None})
     if tasks:
         t = tasks[0]
         top.append({"lane": "TASK", "title": t["text"],
@@ -186,10 +214,13 @@ def build_top3(jobs, projects, tasks, today):
                          else it.get("name") or it.get("text"))
                 if title in used:
                     continue
+                due = it.get("due")
                 rest.append({"lane": lane, "title": title,
                              "action": (it.get("next") or it.get("status")
                                         or LANE_LABEL.get(it.get("queue"), "")),
-                             "priority": it["priority"], "score": it["score"], "age": None})
+                             "priority": it["priority"], "score": it["score"], "age": None,
+                             "due": f"{due:%d %b}" if due else None,
+                             "due_days": (due - today).days if due else None})
         rest.sort(key=lambda x: x["score"], reverse=True)
         top += rest[: 3 - len(top)]
     return top[:3]

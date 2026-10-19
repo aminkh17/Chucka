@@ -48,8 +48,24 @@ The three P1s — best job, best project, best task — are the day's **Top 3**,
 morning rule (1 submit • 1 code • 1 study). The PNG writes `out/priorities-<date>.json` and
 the podcast generator reads it, so the image and the voice note always agree.
 
-Override with `#p1` / `#p2` / `#p3` on any task line, or `priority:: 1|2|3` anywhere in a
-project note. Explicit tags beat the computed score, in ordering and in banding.
+### Deadlines
+
+Put a deadline in a project note on its own line:
+
+```markdown
+due:: 2026-10-25          # also: deadline:: 2026-10-25  or  📅 2026-10-25
+```
+
+The score jumps by urgency: overdue **+60**, due today **+55**, ≤2 days **+45**, ≤7 days
+**+32**, ≤14 days **+20**, ≤30 days **+10**. The date is printed on the project card
+(`due 21 Oct (1d)`, `OVERDUE 2d`) and passed to the voice script.
+
+### Manual override
+
+Add `#p1`, `#p2` or `#p3` to any task line, or put `priority:: 1|2|3` (or
+`high|medium|low`) on its own line in a project note. Explicit beats the computed score —
+including deadlines: it sorts the item (P1 to the top, P3 to the bottom) and forces the
+band.
 
 ## Requirements
 

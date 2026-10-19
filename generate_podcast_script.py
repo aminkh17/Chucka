@@ -95,7 +95,8 @@ def dashboard_summary():
         "projects": [
             {"name": p["name"], "status": p["status"], "open_tasks": p["open"],
              "done_tasks": p["done"], "last_edited": iso(p["updated"]),
-             "priority": p["priority"], "priority_score": p["score"]}
+             "due": iso(p.get("due")), "priority": p["priority"],
+             "priority_score": p["score"]}
             for p in ranked["projects"][:8]
         ],
         "open_tasks_total": total,
@@ -128,7 +129,8 @@ Write the script so it is spoken out loud, not read:
    - "top3": the three must-dos for today — one job, one project, one task. They are
      already ranked: follow their exact order and explain why each one matters
    - how many active job roles there are and the single most important next action
-   - the state of the projects, naming only the two or three that need attention
+   - the state of the projects, naming only the two or three that need attention; if one
+     has a deadline, say whether it is overdue, due today, or how many days are left
    - what is in the study queue and what writing is waiting
 4. Close with one motivating sentence. This closing line is required, always include it.
 

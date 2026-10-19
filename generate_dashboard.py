@@ -4,7 +4,7 @@ import json, os, re, sys, glob, datetime as dt
 from PIL import Image, ImageDraw, ImageFont
 
 import envload; envload.load_env()  # noqa: E402
-from priority import build_payload, priority_field  # noqa: E402
+from priority import build_payload, parse_due, priority_field  # noqa: E402
 
 VAULT = os.environ.get("VAULT", "")
 OUT_DIR = os.environ.get("OUT_DIR", os.path.join(os.path.dirname(os.path.abspath(__file__)), "out"))
@@ -86,15 +86,18 @@ def load_projects():
         open_t = re.findall(r"^\s*- \[ \] (.+)$", body, re.M)
         done_t = re.findall(r"^\s*- \[x\] (.+)$", body, re.M | re.I)
         status = ""
-        sm = re.search(r"(?im)^\s*[-*]?\s*\**(stage|status)\**\s*[:—-]\s*(.+)$", body)
+        sm = re.search(r"(?im)^\s*[-*]?\s*\**(stage|status)\**\s*(?:::|:|—)\s*(.+)$", body)
         if sm:
             status = clean(sm.group(2))
         elif open_t:
             status = "Next: " + clean(open_t[0])
         else:
             status = "Idea / notes"
+        project_meta = "\n".join(l for l in body.splitlines()
+                                 if not re.match(r"^\s*- \[[ xX]\]", l))
         projs.append({"name": name, "status": status, "open": len(open_t), "done": len(done_t),
-                      "updated": mdate(latest), "explicit": priority_field(body)})
+                      "updated": mdate(latest), "explicit": priority_field(body),
+                      "due": parse_due(project_meta)})
     projs.sort(key=lambda p: p["updated"], reverse=True)
     return projs
 
@@ -206,8 +209,14 @@ def main():
     cy = y + 60
     for i, item in enumerate(payload["top3"]):
         bg, dot = colors[i % len(colors)]
-        age = item.get("age")
-        suffix = f"  •  {age}d since update" if age is not None else ""
+        if item.get("due_days") is not None:
+            left = item["due_days"]
+            when = (("OVERDUE %dd" % abs(left)) if left < 0
+                    else "DUE TODAY" if left == 0 else f"due {item['due']} ({left}d)")
+            suffix = f"  •  {when}"
+        else:
+            age = item.get("age")
+            suffix = f"  •  {age}d since update" if age is not None else ""
         d.rounded_rectangle([L + 20, cy, R - 20, cy + 80], radius=14, fill=bg)
         d.ellipse([L + 34, cy + 16, L + 46, cy + 28], fill=dot)
         d.text((L + 54, cy + 8), fit(f"{i + 1}  {item['title']}{suffix}", F(21, True), CW - 250),
@@ -259,8 +268,15 @@ def main():
     cy = y + 60
     if projects:
         p = projects[0]
+        if p.get("due"):
+            left = (p["due"] - TODAY).days
+            when = (("OVERDUE %dd" % abs(left)) if left < 0
+                    else "due today" if left == 0 else f"due {p['due']:%d %b} ({left}d)")
+            head = f"{p['name'].upper()} — {when}"
+        else:
+            head = f"{p['name'].upper()} — latest activity {p['updated']:%d %b}"
         d.rounded_rectangle([L + 20, cy, R - 20, cy + 96], radius=14, fill=(237, 233, 254))
-        d.text((L + 38, cy + 8), fit(f"{p['name'].upper()} — latest activity {p['updated']:%d %b}", F(20, True), CW - 160), font=F(20, True), fill=(76, 29, 149))
+        d.text((L + 38, cy + 8), fit(head, F(20, True), CW - 160), font=F(20, True), fill=(76, 29, 149))
         d.text((L + 38, cy + 36), fit(p["status"], F(19), CW - 80), font=F(19), fill=(76, 60, 120))
         d.text((L + 38, cy + 64), f"{p['done']} done • {p['open']} open", font=F(18), fill=(109, 88, 160))
         ppw = d.textlength(p["priority"], font=F(15, True)) + 20
@@ -279,7 +295,8 @@ def main():
         d.rounded_rectangle([bx + colw - 10 - psw, by + 5, bx + colw - 10, by + 24], radius=9, fill=PRIO_COLORS[p["priority"]])
         d.text((bx + colw - 10 - psw + 7, by + 7), p["priority"], font=F(13, True), fill=(255, 255, 255))
         if cell_h >= 44:
-            d.text((bx + 12, by + 25), fit(p["status"], F(17), colw - 24), font=F(17), fill=MUTED)
+            status = p["status"] + (f" • due {p['due']:%d %b}" if p.get("due") else "")
+            d.text((bx + 12, by + 25), fit(status, F(17), colw - 24), font=F(17), fill=MUTED)
 
     # learn / write / review
     y, h = y + h + 16, 330

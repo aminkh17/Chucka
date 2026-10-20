@@ -160,20 +160,32 @@ def task_score(task, today, project_priorities):
     return _score(score)
 
 
+def _urgency(due, today):
+    """Deadline pressure: 2 = overdue/due today, 1 = due within two days, else 0."""
+    if not due:
+        return 0
+    left = (due - today).days
+    return 2 if left <= 0 else 1 if left <= 2 else 0
+
+
 def _order(item):
-    return item["score"] + _ORDER_BONUS.get(item.get("explicit"), 0)
+    # an urgent deadline outranks a flag; an explicit #p3 still sinks to the bottom
+    demoted = -1 if item.get("explicit") == "P3" else 0
+    return (demoted, item.get("urgency", 0),
+            item["score"] + _ORDER_BONUS.get(item.get("explicit"), 0))
 
 
 def _band(items, cuts):
-    """P1 for the first `cuts[0]`, P2 up to `cuts[1]`, P3 after — explicit wins."""
+    """P1 for the first `cuts[0]`, P2 up to `cuts[1]`, P3 after — flags and deadlines lift."""
     for i, item in enumerate(items):
         rank = "P1" if i < cuts[0] else "P2" if i < cuts[1] else "P3"
         explicit = item.get("explicit")
-        if explicit == "P1":
-            band = "P1"
-        elif explicit == "P3":
+        urgent = item.get("urgency", 0)
+        if explicit == "P3":
             band = "P3"
-        elif explicit == "P2" and rank == "P3":
+        elif explicit == "P1" or urgent == 2:
+            band = "P1"
+        elif (explicit == "P2" or urgent == 1) and rank == "P3":
             band = "P2"
         else:
             band = rank
@@ -191,6 +203,7 @@ def rank_jobs(jobs, today):
 
 def rank_projects(projects, today):
     items = [dict(p, score=project_score(p, today),
+                  urgency=_urgency(p.get("due"), today),
                   explicit=p.get("explicit") or explicit_priority(p.get("name"), p.get("status")))
              for p in projects]
     items.sort(key=_order, reverse=True)
@@ -202,6 +215,7 @@ def rank_tasks(tasks, today, project_priorities):
     ranked = {}
     for name, items in tasks.items():
         rows = [dict(t, score=task_score(t, today, project_priorities),
+                     urgency=_urgency(t.get("due"), today),
                      explicit=explicit_priority(t.get("raw")))
                 for t in items]
         for row in rows:

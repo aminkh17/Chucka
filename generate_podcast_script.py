@@ -104,6 +104,8 @@ def dashboard_summary():
         "study": task_rows(ranked["tasks"]["learn"]),
         "writing": task_rows(ranked["tasks"]["write"]),
         "reviews": task_rows(ranked["tasks"]["review"]),
+        "focus": task_rows([t for t in ranked["tasks"].get("other", [])
+                            if t.get("due") or t.get("explicit")]),
     }
 
 
@@ -132,7 +134,8 @@ Write the script so it is spoken out loud, not read:
    - how many active job roles there are and the single most important next action
    - the state of the projects, naming only the two or three that need attention; if one
      has a deadline, say whether it is overdue, due today, or how many days are left
-   - what is in the study queue and what writing is waiting, including any due dates
+   - what is in the study queue, what writing is waiting, and any focus tasks (due today,
+     overdue or flagged), including their due dates
 4. Close with one motivating sentence. This closing line is required, always include it.
 
 Rules:

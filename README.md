@@ -41,8 +41,8 @@ temperature, follow-up staleness, project next-actions and open tasks, task type
 words, due dates and priority flags, plus priority inheritance from the task's project — then
 banded within its lane:
 
-- **P1** — do first (one per lane)
-- **P2** — next up
+- **P1** — do first (top of the lane, plus overdue/due-today or explicitly flagged items)
+- **P2** — next up (anything due within two days is at least P2)
 - **P3** — later
 
 The three P1s — best job, best project, best task — are the day's **Top 3**, matching the
@@ -59,7 +59,8 @@ due:: 2026-10-25          # also: deadline:: 2026-10-25  or  📅 2026-10-25
 
 The score jumps by urgency: overdue **+60**, due today **+55**, ≤2 days **+45**, ≤7 days
 **+32**, ≤14 days **+20**, ≤30 days **+10**. The date is printed on the project card
-(`due 21 Oct (1d)`, `OVERDUE 2d`) and passed to the voice script.
+(`due 21 Oct (1d)`, `OVERDUE 2d`) and passed to the voice script. A deadline also lifts the
+band: overdue or due today is always **P1**, due within two days is at least **P2**.
 
 ### Task dates and flags
 
@@ -72,15 +73,17 @@ emoji metadata:
 
 `📅` (or `due::`) is the end date; `🔺` highest and `⏫` high map to **P1**, `🔼` medium to
 **P2**, `🔽` low and `⏬` lowest to **P3**. A flag beats the computed score, and a due date adds
-the same urgency points as a project deadline (`due 10 Nov`, `OVERDUE 2d`). Tasks without a
-`#study` / `#write` / `#review` tag still rank — a due date or flag can put one in the Top 3.
+the same urgency points as a project deadline (`due 10 Nov`, `OVERDUE 2d`) and lifts the band
+(overdue/due today → P1, ≤2 days → at least P2). Tasks without a `#study` / `#write` /
+`#review` tag still rank: a due date or flag can put one in the Top 3 or the dashboard's
+**FOCUS** list.
 
 ### Manual override
 
 Add `#p1`, `#p2` or `#p3` to any task line, or put `priority:: 1|2|3` (or
-`high|medium|low`) on its own line in a project note. Explicit beats the computed score —
-including deadlines: it sorts the item (P1 to the top, P3 to the bottom) and forces the
-band.
+`high|medium|low`) on its own line in a project note. Explicit P1/P2 lift an item; P3
+demotes it. Urgent deadlines outrank flags — a task due today comes before one merely marked
+P1 — but an explicit `#p3` / `low` always stays at P3.
 
 ## Requirements
 

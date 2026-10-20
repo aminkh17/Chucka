@@ -180,10 +180,21 @@ def due_tag(item):
         return ""
     left = (due - TODAY).days
     if left < 0:
-        return "  •  OVERDUE"
+        return f"  •  OVERDUE {abs(left)}d"
     if left == 0:
         return "  •  due today"
     return f"  •  due {due:%d %b}"
+
+def task_row(x, y, width, t):
+    """One task row: priority, text, and a right-aligned due label."""
+    d.text((x, y), t["priority"], font=F(14, True), fill=PRIO_COLORS[t["priority"]])
+    label = due_tag(t).replace("  •  ", "")
+    lw = d.textlength(label, font=F(16)) if label else 0
+    text_w = width - (lw + 10 if label else 0)
+    d.text((x + 26, y), fit("• " + t["text"], F(19), text_w), font=F(19), fill=(40, 55, 75))
+    if label:
+        d.text((x + 26 + width - lw, y + 2), label, font=F(16),
+               fill=RED if label.startswith("OVERDUE") else MUTED)
 
 def label(x, y, text, color):
     f = F(20, True)
@@ -252,8 +263,9 @@ def main():
             suffix = f"  •  {age}d since update" if age is not None else ""
         d.rounded_rectangle([L + 20, cy, R - 20, cy + 80], radius=14, fill=bg)
         d.ellipse([L + 34, cy + 16, L + 46, cy + 28], fill=dot)
-        d.text((L + 54, cy + 8), fit(f"{i + 1}  {item['title']}{suffix}", F(21, True), CW - 250),
-               font=F(21, True), fill=INK)
+        title = fit(f"{i + 1}  {item['title']}", F(21, True),
+                    CW - 250 - d.textlength(suffix, font=F(21, True)))
+        d.text((L + 54, cy + 8), title + suffix, font=F(21, True), fill=INK)
         d.text((L + 54, cy + 40), fit(item.get("action") or "", F(20), CW - 250), font=F(20),
                fill=(55, 65, 90))
         pw = d.textlength(item["lane"], font=F(15, True)) + 22
@@ -331,25 +343,28 @@ def main():
             status = p["status"] + (f" • due {p['due']:%d %b}" if p.get("due") else "")
             d.text((bx + 12, by + 25), fit(status, F(17), colw - 24), font=F(17), fill=MUTED)
 
-    # learn / write / review
+    # learn / write / review / focus
     y, h = y + h + 16, 330
     card(y, h)
-    label(L + 24, y + 16, "LEARN  •  WRITE  •  REVIEW", TEAL)
+    label(L + 24, y + 16, "LEARN  •  WRITE  •  REVIEW  •  FOCUS", TEAL)
     cy = y + 60
     rx = L + CW // 2 + 8
+    focus = [t for t in tasks.get("other", []) if t.get("due") or t.get("explicit")]
     d.text((L + 38, cy), f"STUDY QUEUE ({len(tasks['learn'])})", font=F(19, True), fill=INK)
-    d.text((rx, cy), f"WRITE ({len(tasks['write'])}) + REVIEW ({len(tasks['review'])})", font=F(19, True), fill=INK)
+    head = f"WRITE ({len(tasks['write'])}) + REVIEW ({len(tasks['review'])})"
+    if focus:
+        head += f" + FOCUS ({len(focus)})"
+    d.text((rx, cy), head, font=F(19, True), fill=INK)
     cy += 28
-    right = sorted(tasks["write"] + tasks["review"], key=lambda t: (t["priority"], -t["score"]))[:5]
+    right = sorted(tasks["write"] + tasks["review"] + focus,
+                   key=lambda t: (t["priority"], -t["score"]))[:5]
     for i in range(5):
         if i < len(tasks["learn"]):
             t = tasks["learn"][i]
-            d.text((L + 38, cy + i * 26), t["priority"], font=F(14, True), fill=PRIO_COLORS[t["priority"]])
-            d.text((L + 64, cy + i * 26), fit("• " + t["text"] + due_tag(t), F(19), CW // 2 - 76), font=F(19), fill=(40, 55, 75))
+            task_row(L + 38, cy + i * 26, CW // 2 - 76, t)
         if i < len(right):
             t = right[i]
-            d.text((rx, cy + i * 26), t["priority"], font=F(14, True), fill=PRIO_COLORS[t["priority"]])
-            d.text((rx + 26, cy + i * 26), fit("• " + t["text"] + due_tag(t), F(19), CW // 2 - 76), font=F(19), fill=(40, 55, 75))
+            task_row(rx, cy + i * 26, CW // 2 - 76, t)
     by = y + h - 62
     d.rounded_rectangle([L + 20, by, R - 20, by + 46], radius=13, fill=NAVY)
     d.text((L + 38, by + 11), "Morning rule: 1 submit  •  1 code  •  1 study  •  pick 3 Must-Do", font=F(20, True), fill=(255, 255, 255))

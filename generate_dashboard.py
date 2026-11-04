@@ -31,7 +31,7 @@ def clean(s):
 # Obsidian Tasks metadata: due dates, priority flags, and other emoji fields
 TASK_META = re.compile(
     r"(?:📅|🛫|⏳|✅|➕|🔁|❌|🆔|⛔)\s*\d{4}-\d{2}-\d{2}"
-    r"|(?:due|deadline)\s*::?\s*\d{4}-\d{2}-\d{2}"
+    r"|(?:due|deadline|completion|completed|done)\s*::?\s*\d{4}-\d{2}-\d{2}"
     r"|[🔺⏫🔼🔽⏬]",
     re.IGNORECASE,
 )
@@ -145,6 +145,45 @@ def load_tasks():
                 # untagged tasks still rank (a due date or priority flag can put one on the top 3)
                 tagged["other"].append(item)
     return tagged, total
+
+
+def load_completed_tasks(day):
+    """Checked tasks with an explicit completion date; note edits are not evidence."""
+    completed = []
+    completion_date = re.compile(
+        r"(?:✅\s*|\b(?:completion|completed|done)\s*::?\s*)(\d{4}-\d{2}-\d{2})\b",
+        re.IGNORECASE,
+    )
+    for f in sorted(glob.glob(os.path.join(VAULT, "**", "*.md"), recursive=True)):
+        if "/." in f:
+            continue
+        source = os.path.relpath(f, VAULT)
+        fence = None
+        with open(f, encoding="utf-8", errors="ignore") as note:
+            for number, line in enumerate(note, 1):
+                marker = re.match(r"^\s*(`{3,}|~{3,})", line)
+                if marker:
+                    token = marker.group(1)
+                    if fence is None:
+                        fence = token
+                    elif token[0] == fence[0] and len(token) >= len(fence):
+                        fence = None
+                    continue
+                if fence:
+                    continue
+                task = re.match(r"^\s*[-*+]\s+\[[xX]\]\s+(.+)$", line.rstrip())
+                if not task:
+                    continue
+                raw = task.group(1)
+                date = completion_date.search(raw)
+                if not date or date.group(1) != day.isoformat():
+                    continue
+                completed.append({
+                    "task": clean_task(raw), "completed_date": day.isoformat(),
+                    "project": clean(source.split("/")[1]) if source.startswith("Projects/") else "",
+                    "source": source, "line": number,
+                })
+    return completed
 
 # ---------- drawing ----------
 W, H = 1080, 1920

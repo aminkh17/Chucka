@@ -12,8 +12,11 @@ Built for macOS. Opinionated, single-user, no server.
 ```
 Obsidian vault ──┬─> generate_dashboard.py ──────────────> dashboard PNG ─┐
                  │                                                        │
-                 └─> generate_podcast_script.py ──> script text           │
+                 └─> generate_podcast_script.py ──> plain script text     │
                           (vault + weather + opencode CLI)                │
+                               │                                         │
+                               ├─> opencode pass 2 ──> tagged script     │
+                               │      (non-verbal tags)                  │
                                │                                         ▼
                                └─> tts_voicestudio.py   (local VoiceStudio / OmniVoice, cloned voice)
                                    tts_gemini.py        (Google Gemini TTS fallback)
@@ -26,11 +29,11 @@ run-morning.sh  ─────────────────────�
 ```
 
 - **Dashboard** — reads the vault live and renders with Pillow: jobs from the `Job Hunting/*.md` table, projects from `Projects/`, tasks picked up by `#tag`s.
-- **Podcast script** — feeds the same data plus Melbourne weather (wttr.in) to the [opencode](https://opencode.ai) CLI (model configurable), which writes a ~170-word spoken summary with a fresh greeting every day. The last three openings are fed back so it never repeats one.
+- **Podcast script** — feeds the same data plus Melbourne weather (wttr.in) to the [opencode](https://opencode.ai) CLI (model configurable), which writes a ~170-word spoken summary with a fresh greeting every day. The last three openings are fed back so it never repeats one. The writing itself carries the mood — informal, friendly, happy, excited and energetic, changing with each section. A **second opencode run** then adds a few of OmniVoice's supported non-verbal sounds (`[laughter]`, `[sigh]`, `[surprise-oh]`, …) without changing a word. Emotion labels such as `[excited]` are **not** used: this engine does not support them and would speak them aloud. The untagged and tagged versions are written to `podcast/script-<date>.txt` and `podcast/script-<date>.tagged.txt`.
 - **Voice** — three tiers, all producing the same output (Ogg/Opus mono, loudness-normalised):
-  1. `tts_voicestudio.py` — local [VoiceStudio](https://github.com/debpalash/VoiceStudio) app (OmniVoice engine, `k2-fsa/OmniVoice`): your own cloned voice, inline emotion tags like `[laughter]` / `[sigh]` supported
-  2. `tts_gemini.py` — Google Gemini TTS (`gemini-3.8-flash-tts`): cloud fallback when VoiceStudio is unavailable
-  3. `text_to_voice.py` — macOS `say`: always works, no dependencies
+  1. `tts_voicestudio.py` — local [VoiceStudio](https://github.com/debpalash/VoiceStudio) app (OmniVoice engine, `k2-fsa/OmniVoice`): your own cloned voice, performing the occasional supported non-verbal tag (`[laughter]`, `[sigh]`, `[confirmation-en]`, `[question-en]`, `[surprise-ah]`, `[surprise-oh]`, `[dissatisfaction-hnn]`)
+  2. `tts_gemini.py` — Google Gemini TTS (`gemini-3.8-flash-tts`): cloud fallback when VoiceStudio is unavailable (reads the plain script; any tags are stripped)
+  3. `text_to_voice.py` — macOS `say`: always works, no dependencies (tags stripped)
 - **Delivery** — [OpenWA](https://open-wa.org) (unofficial WhatsApp Web gateway) sends the image, then the voice note as a real PTT bubble. Both wait for a `delivered`/`read` confirmation before the job finishes. The runner starts the gateway only when needed and stops what it started.
 - **Schedule** — a launchd agent runs `run-morning.sh` daily at 07:00. A single day's failure (Mac asleep, vault unreadable, script generation down) degrades gracefully: the image still goes out even if the voice can't be made.
 
@@ -61,6 +64,22 @@ The score jumps by urgency: overdue **+60**, due today **+55**, ≤2 days **+45*
 **+32**, ≤14 days **+20**, ≤30 days **+10**. The date is printed on the project card
 (`due 21 Oct (1d)`, `OVERDUE 2d`) and passed to the voice script. A deadline also lifts the
 band: overdue or due today is always **P1**, due within two days is at least **P2**.
+
+### Yesterday's wins (voice note)
+
+The voice briefing celebrates two or three of yesterday's recorded completions before
+today's Top 3, rather than just reading the backlog. Mark finished tasks with an explicit
+completion date anywhere in the vault (nested tasks count too):
+
+```markdown
+- [x] Ship the voice-note update ✅ 2026-10-23
+- [x] Submit the application completed:: 2026-10-23
+```
+
+Use the actual day you finished the task. Undated checkmarks, file edit times and lifetime
+project completion totals cannot establish yesterday's work, so they are not used as wins.
+If none are recorded, the voice says so without implying you did nothing. The PNG and
+today's priority ranking are unchanged.
 
 ### Task dates and flags
 
@@ -138,7 +157,8 @@ Everything lives in `.env` (see `.env.example` for the full list with comments):
 | `WA_TO` | — | destination number, international format (required) |
 | `OPENWA_SESSION` | — | OpenWA session name (required) |
 | `PYTHON_BIN`, `OPENWA_NODE` | `python3`, `node` | absolute binary paths for launchd |
-| `OPENCODE_BIN`, `PODCAST_MODEL` | `/opt/homebrew/bin/opencode`, `opencode/deepseek-v4.1-flash-free` | script generation |
+| `OPENCODE_BIN`, `PODCAST_MODEL` | `/opt/homebrew/bin/opencode`, unset (uses OpenCode's configured default) | script generation; set `PODCAST_MODEL` only to override the default for Chucka |
+| `PODCAST_PERFORMANCE_TAGS` | `1` | second opencode pass adds supported OmniVoice non-verbal tags (`0` disables) |
 | `PODCAST_VS_VOICE`, `PODCAST_VS_SPEED` | `Farah`, `1.08` | VoiceStudio profile (name or id) and pace |
 | `PODCAST_VS_INSTRUCT` | *(empty)* | optional voice-design style for VoiceStudio |
 | `PODCAST_GEMINI_VOICE`, `GEMINI_API_KEY` | `Kore`, *(empty)* | Gemini fallback |
@@ -155,6 +175,7 @@ Everything lives in `.env` (see `.env.example` for the full list with comments):
 - **Nothing arrived** — check `logs/morning.log`; message sends must *not* stop the gateway until a `delivered`/`read` confirmation (the runner handles this — keep it).
 - **"Session needs re-linking"** — WhatsApp unlinked the session; scan the QR code again in the OpenWA dashboard.
 - **Wrong/robotic voice** — VoiceStudio wasn't reachable: the log line says which tier was used (`VoiceStudio` / `Gemini fallback` / `say fallback`). VoiceStudio's model cold-loads after ~15 min idle (~10–20 s).
+- **Tags read aloud literally** — OmniVoice only supports `[laughter]`, `[sigh]`, `[confirmation-en]`, `[question-en]`, `[question-ah]`, `[question-oh]`, `[question-ei]`, `[question-yi]`, `[surprise-ah]`, `[surprise-oh]`, `[surprise-wa]`, `[surprise-yo]`, `[dissatisfaction-hnn]`. The second pass uses only those; emotion labels are stripped. `PODCAST_PERFORMANCE_TAGS=0` disables the pass entirely.
 - **`ffmpeg not found` under launchd** — set absolute paths in `.env`; launchd's PATH is minimal.
 - **Mac asleep at 07:00** — the job runs on wake; `sudo pmset repeat wakeorpoweron MTWRFSU 06:58:00` fixes the timing.
 
@@ -163,7 +184,7 @@ Everything lives in `.env` (see `.env.example` for the full list with comments):
 ```
 priority.py                 scoring + Top 3, shared by the PNG and the voice
 generate_dashboard.py       vault → PNG (+ out/priorities-<date>.json)
-generate_podcast_script.py  vault + weather → script via opencode CLI (same ranking)
+generate_podcast_script.py  vault + weather → script plus tagged version via opencode CLI (same ranking)
 tts_voicestudio.py          script → voice (VoiceStudio)
 tts_gemini.py               script → voice (Gemini)
 text_to_voice.py            script → voice (macOS say)

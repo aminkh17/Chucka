@@ -2,8 +2,16 @@
 """Generate the podcast voice note with the local VoiceStudio API (OmniVoice engine).
 
 VoiceStudio must be running: its OpenAI-compatible speech endpoint lives on
-http://127.0.0.1:3900/v1/audio/speech while the app is open. The engine
-understands inline non-verbal tags such as [laughter] and [sigh] in the text.
+http://127.0.0.1:3900/v1/audio/speech while the app is open. OmniVoice only
+understands these non-verbal tokens:
+
+  [laughter] [sigh] [confirmation-en] [question-en] [question-ah] [question-oh]
+  [question-ei] [question-yi] [surprise-ah] [surprise-oh] [surprise-wa]
+  [surprise-yo] [dissatisfaction-hnn]
+
+Emotion labels such as [excited] or [happy] are NOT supported — they would be
+spoken aloud. generate_podcast_script.py writes a tagged version of the script
+that uses only the supported tokens.
 
 The voice is given by profile name ("Amin1", "Farah", ...) or profile id.
 Energy knobs:

@@ -21,6 +21,7 @@ PNG="$("$PY" "$ROOT/generate_dashboard.py")"
 echo "rendered $PNG"
 
 SCRIPT_FILE="$ROOT/podcast/script-$(date '+%F').txt"
+TAGGED_FILE="$ROOT/podcast/script-$(date '+%F').tagged.txt"
 VOICE="$ROOT/podcast/voice-$(date '+%F').ogg"
 if "$PY" "$ROOT/generate_podcast_script.py" >/dev/null 2>"$LOG_DIR/podcast.log"; then
   echo "script $SCRIPT_FILE"
@@ -31,6 +32,10 @@ fi
 if [[ -n $VOICE ]]; then
   # Voice quality tiers: VoiceStudio (local, cloned voice) → Gemini TTS (cloud)
   # → macOS say (always works). Start VoiceStudio if it isn't up.
+  # VoiceStudio gets the second opencode pass with supported non-verbal tags; the other
+  # tiers read the plain script (they strip tags anyway).
+  VS_SCRIPT="$TAGGED_FILE"
+  [[ -f $VS_SCRIPT ]] || VS_SCRIPT="$SCRIPT_FILE"
   if ! curl -sf http://127.0.0.1:3900/health >/dev/null; then
     echo "starting VoiceStudio"
     /usr/bin/open -a VoiceStudio
@@ -39,8 +44,8 @@ if [[ -n $VOICE ]]; then
       sleep 2
     done
   fi
-  if "$PY" "$ROOT/tts_voicestudio.py" "$SCRIPT_FILE" "$VOICE"; then
-    echo "voice $VOICE (VoiceStudio)"
+  if "$PY" "$ROOT/tts_voicestudio.py" "$VS_SCRIPT" "$VOICE"; then
+    echo "voice $VOICE (VoiceStudio, performance tags)"
   elif "$PY" "$ROOT/tts_gemini.py" "$SCRIPT_FILE" "$VOICE"; then
     echo "voice $VOICE (Gemini fallback)"
   elif "$PY" "$ROOT/text_to_voice.py" "$SCRIPT_FILE" "$VOICE"; then

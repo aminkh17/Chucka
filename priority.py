@@ -228,7 +228,7 @@ def rank_tasks(tasks, today, project_priorities):
 
 
 def _task_context(task):
-    """Queue and project for the voice/PNG, e.g. 'Writing • Chucka' or just 'Magic'."""
+    """Queue and project for the voice/PNG, e.g. 'Writing • Chucka' or just 'Side Project'."""
     parts = [LANE_LABEL.get(task.get("queue"), ""), task.get("project")]
     return " • ".join(p for p in parts if p) or "Inbox"
 

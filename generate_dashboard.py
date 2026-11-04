@@ -7,6 +7,7 @@ import envload; envload.load_env()  # noqa: E402
 from priority import build_payload, parse_due, parse_task_due, priority_field  # noqa: E402
 
 VAULT = os.environ.get("VAULT", "")
+JOBS_NOTE = os.environ.get("JOBS_NOTE", "Job Hunting/Jobs.md")
 OUT_DIR = os.environ.get("OUT_DIR", os.path.join(os.path.dirname(os.path.abspath(__file__)), "out"))
 TODAY = dt.date.today()
 
@@ -45,7 +46,7 @@ def parse_date(s):
 
 # ---------- data ----------
 def load_jobs():
-    text = read("Job Hunting/2026 Job hunt.md")
+    text = read(JOBS_NOTE)
     jobs, closed = [], []
     updated = parse_date(re.search(r"updated (\d{4}-\d{2}-\d{2})", text).group(1)) if re.search(r"updated (\d{4}-\d{2}-\d{2})", text) else None
     header = None

@@ -28,7 +28,7 @@ run-morning.sh  ─────────────────────�
                                                           (OpenWA gateway → WhatsApp, waits for delivery)
 ```
 
-- **Dashboard** — reads the vault live and renders with Pillow: jobs from the `Job Hunting/*.md` table, projects from `Projects/`, tasks picked up by `#tag`s.
+- **Dashboard** — reads the vault live and renders with Pillow: jobs from the table in the `JOBS_NOTE` note, projects from `Projects/`, tasks picked up by `#tag`s.
 - **Podcast script** — feeds the same data plus Melbourne weather (wttr.in) to the [opencode](https://opencode.ai) CLI (model configurable), which writes a ~170-word spoken summary with a fresh greeting every day. The last three openings are fed back so it never repeats one. The writing itself carries the mood — informal, friendly, happy, excited and energetic, changing with each section. A **second opencode run** then adds a few of OmniVoice's supported non-verbal sounds (`[laughter]`, `[sigh]`, `[surprise-oh]`, …) without changing a word. Emotion labels such as `[excited]` are **not** used: this engine does not support them and would speak them aloud. The untagged and tagged versions are written to `podcast/script-<date>.txt` and `podcast/script-<date>.tagged.txt`.
 - **Voice** — three tiers, all producing the same output (Ogg/Opus mono, loudness-normalised):
   1. `tts_voicestudio.py` — local [VoiceStudio](https://github.com/debpalash/VoiceStudio) app (OmniVoice engine, `k2-fsa/OmniVoice`): your own cloned voice, performing the occasional supported non-verbal tag (`[laughter]`, `[sigh]`, `[confirmation-en]`, `[question-en]`, `[surprise-ah]`, `[surprise-oh]`, `[dissatisfaction-hnn]`)
@@ -155,6 +155,7 @@ Everything lives in `.env` (see `.env.example` for the full list with comments):
 |---|---|---|
 | `VAULT` | — | Obsidian vault path (required) |
 | `WA_TO` | — | destination number, international format (required) |
+| `JOBS_NOTE` | `Job Hunting/Jobs.md` | vault-relative note holding the job-hunt table |
 | `OPENWA_SESSION` | — | OpenWA session name (required) |
 | `PYTHON_BIN`, `OPENWA_NODE` | `python3`, `node` | absolute binary paths for launchd |
 | `OPENCODE_BIN`, `PODCAST_MODEL` | `/opt/homebrew/bin/opencode`, unset (uses OpenCode's configured default) | script generation; set `PODCAST_MODEL` only to override the default for Chucka |

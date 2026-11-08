@@ -184,7 +184,71 @@ def load_completed_tasks(day):
                     "project": clean(source.split("/")[1]) if source.startswith("Projects/") else "",
                     "source": source, "line": number,
                 })
+    seen = {(c["source"], c["task"]) for c in completed}
+    for c in load_git_completed_tasks(day):
+        if (c["source"], c["task"]) not in seen:
+            seen.add((c["source"], c["task"]))
+            completed.append(c)
     return completed
+
+
+def _git(*args):
+    import subprocess
+    try:
+        return subprocess.run(["git", "-C", VAULT, *args], capture_output=True, text=True,
+                              timeout=60, check=True).stdout
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
+def load_git_completed_tasks(day):
+    """Tasks that became checked during `day`, per the vault's git history.
+
+    Compares the last commit before the day began with the last commit before it ended,
+    so a task counts only if it was checked at the end of the day but not at the start.
+    """
+    if not VAULT or _git("rev-parse", "--git-dir") is None:
+        return []
+    def commit_before(d):
+        return (_git("rev-list", "-1", f"--before={d.isoformat()} 00:00", "HEAD") or "").strip()
+    end = commit_before(day + dt.timedelta(days=1))
+    if not end:
+        return []
+    start = commit_before(day) or "4b825dc642cb6eb9a060e54bf8d69288fbee4904"  # empty tree
+    if start == end:
+        return []
+    diff = _git("diff", "--unified=0", "--no-color", "--no-renames", start, end, "--", "*.md")
+    if not diff:
+        return []
+    task = re.compile(r"^([+-])\s*[-*+]\s+\[([ xX])\]\s+(.+)$")
+    removed_done, added_done, source, line_no = set(), [], None, 0
+    for line in diff.splitlines():
+        if line.startswith("+++ "):
+            source = line[6:] if line.startswith("+++ b/") else None
+            continue
+        if line.startswith("--- "):
+            continue
+        hunk = re.match(r"^@@ -\d+(?:,\d+)? \+(\d+)", line)
+        if hunk:
+            line_no = int(hunk.group(1))
+            continue
+        m = task.match(line)
+        if line.startswith("+"):
+            if m and m.group(2) in "xX" and source and "/." not in "/" + source:
+                added_done.append((source, clean_task(m.group(3)), line_no))
+            line_no += 1
+        elif m and m.group(2) in "xX":
+            removed_done.add(clean_task(m.group(3)))
+    out = []
+    for source, text, number in added_done:
+        if not text or text in removed_done:  # already done; just moved or reformatted
+            continue
+        out.append({
+            "task": text, "completed_date": day.isoformat(),
+            "project": clean(source.split("/")[1]) if source.startswith("Projects/") else "",
+            "source": source, "line": number,
+        })
+    return out
 
 # ---------- drawing ----------
 W, H = 1080, 1920

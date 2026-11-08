@@ -76,7 +76,10 @@ completion date anywhere in the vault (nested tasks count too):
 - [x] Submit the application completed:: 2026-10-23
 ```
 
-Use the actual day you finished the task. Undated checkmarks, file edit times and lifetime
+Use the actual day you finished the task. If the vault is a git repository (for example via
+Obsidian Git auto-backups), undated checkmarks also count: a task that was unchecked (or absent)
+in the last commit before yesterday and checked in the last commit before today is a win.
+Checked tasks that were only moved or reformatted are ignored. File edit times and lifetime
 project completion totals cannot establish yesterday's work, so they are not used as wins.
 If none are recorded, the voice says so without implying you did nothing. The PNG and
 today's priority ranking are unchanged.

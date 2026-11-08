@@ -41,6 +41,33 @@ class CompletedTasksTests(unittest.TestCase):
             self.assertEqual(rows[0]["source"], "Projects/Chucka/Tasks.md")
             self.assertEqual(rows[0]["line"], 1)
 
+    def test_git_history_detects_undated_completions(self):
+        import os, subprocess
+        with tempfile.TemporaryDirectory() as vault:
+            note = Path(vault, "Projects", "Chucka", "Tasks.md")
+            note.parent.mkdir(parents=True)
+
+            def commit(body, when):
+                note.write_text(body, encoding="utf-8")
+                env = {**os.environ, "GIT_AUTHOR_DATE": when, "GIT_COMMITTER_DATE": when,
+                       "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
+                       "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
+                subprocess.run(["git", "-C", vault, "add", "-A"], check=True, env=env)
+                subprocess.run(["git", "-C", vault, "commit", "-qm", "backup"], check=True, env=env)
+
+            subprocess.run(["git", "init", "-q", vault], check=True)
+            commit("- [ ] Ship it\n- [x] Old win\n- [ ] Later\n", "2026-10-22T20:00:00")
+            commit("- [x] Ship it\n- [x] Old win moved\n- [ ] Later\n- [x] Quick fix\n",
+                   "2026-10-23T12:00:00")
+            commit("- [x] Ship it\n- [x] Old win moved\n- [x] Later\n- [x] Quick fix\n",
+                   "2026-10-24T09:00:00")
+            with patch.object(dashboard, "VAULT", vault):
+                rows = dashboard.load_completed_tasks(dt.date(2026, 10, 23))
+            self.assertIn("Ship it", [r["task"] for r in rows])
+            self.assertIn("Quick fix", [r["task"] for r in rows])
+            self.assertNotIn("Later", [r["task"] for r in rows])
+            self.assertTrue(all(r["project"] == "Chucka" for r in rows))
+
     def test_calendar_yesterday_including_year_boundary(self):
         with tempfile.TemporaryDirectory() as root:
             with patch.multiple(podcast, ROOT=root, TODAY=dt.date(2027, 1, 1)), \
